@@ -1,0 +1,84 @@
+{
+  "version": "1.90.0",
+  "results": [
+    {
+      "check_id": "javascript.express.security.audit.code-injection-eval",
+      "path": "app/routes/contributions.js",
+      "start": {
+        "line": 32,
+        "col": 22,
+        "offset": 910
+      },
+      "end": {
+        "line": 32,
+        "col": 45,
+        "offset": 933
+      },
+      "extra": {
+        "message": "Detected eval() with user-controlled input from req.body.preTax. This leads to Server-Side JavaScript Injection (CWE-95).",
+        "severity": "ERROR",
+        "lines": "var preTax = eval(req.body.preTax);",
+        "metadata": {
+          "cwe": [
+            "CWE-95: Improper Neutralization of Directives in Dynamically Evaluated Code ('Eval Injection')"
+          ],
+          "owasp": [
+            "A03:2021 - Injection"
+          ]
+        }
+      }
+    },
+    {
+      "check_id": "javascript.express.security.audit.nosql-injection",
+      "path": "app/routes/allocations.js",
+      "start": {
+        "line": 24,
+        "col": 9,
+        "offset": 620
+      },
+      "end": {
+        "line": 24,
+        "col": 40,
+        "offset": 651
+      },
+      "extra": {
+        "message": "Unsanitized user input in allocations query allows NoSQL injection (CWE-943).",
+        "severity": "ERROR",
+        "lines": "allocationsDAO.getByUserIdAndThreshold(userId, threshold, ...)",
+        "metadata": {
+          "cwe": [
+            "CWE-943: Improper Neutralization of Special Elements in Data Query Logic"
+          ],
+          "owasp": [
+            "A03:2021 - Injection"
+          ]
+        }
+      }
+    },
+    {
+      "check_id": "javascript.lang.security.detect-hardcoded-credentials",
+      "path": "artifacts/db-reset.js",
+      "start": {
+        "line": 18,
+        "col": 5,
+        "offset": 450
+      },
+      "end": {
+        "line": 18,
+        "col": 52,
+        "offset": 497
+      },
+      "extra": {
+        "message": "Hardcoded test password detected in database initialization script (False Positive candidate).",
+        "severity": "WARNING",
+        "lines": "password: 'User1_123'",
+        "metadata": {
+          "cwe": [
+            "CWE-798: Use of Hard-coded Credentials"
+          ]
+        }
+      }
+    }
+  ],
+  "errors": []
+}

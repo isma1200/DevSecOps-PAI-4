@@ -1,0 +1,47 @@
+{
+  "check_type": "kubernetes",
+  "results": {
+    "passed_checks": [],
+    "failed_checks": [
+      {
+        "check_id": "CKV_K8S_16",
+        "bc_check_id": "BC_K8S_15",
+        "check_name": "Container should not be privileged",
+        "file_path": "/k8s/nodegoat-deployment.yaml",
+        "file_abs_path": "/tf/k8s/nodegoat-deployment.yaml",
+        "repo_file_path": "/k8s/nodegoat-deployment.yaml",
+        "file_line_range": [
+          19,
+          25
+        ],
+        "resource": "Deployment.default.nodegoat-deployment",
+        "check_result": {
+          "result": "FAILED"
+        },
+        "severity": "CRITICAL"
+      },
+      {
+        "check_id": "CKV_DOCKER_2",
+        "bc_check_id": "BC_DKR_2",
+        "check_name": "Ensure that HEALTHCHECK instructions have been added to container images",
+        "file_path": "/Dockerfile",
+        "file_abs_path": "/tf/Dockerfile",
+        "repo_file_path": "/Dockerfile",
+        "file_line_range": [
+          1,
+          8
+        ],
+        "resource": "/Dockerfile.HEALTHCHECK",
+        "check_result": {
+          "result": "FAILED"
+        },
+        "severity": "MEDIUM"
+      }
+    ]
+  },
+  "summary": {
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0
+  }
+}

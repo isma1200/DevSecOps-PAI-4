@@ -1,0 +1,115 @@
+<?xml version="1.0"?>
+<OWASPZAPReport version="2.15.0" generated="Sat, 14 Nov 2026 16:00:00">
+  <site name="http://127.0.0.1:4000" host="127.0.0.1" port="4000" ssl="false">
+    <alerts>
+      <alertitem>
+        <pluginid>10202</pluginid>
+        <alertRef>10202</alertRef>
+        <alert>Absence of Anti-CSRF Tokens</alert>
+        <name>Absence of Anti-CSRF Tokens</name>
+        <riskcode>3</riskcode>
+        <confidence>2</confidence>
+        <riskdesc>High (Medium)</riskdesc>
+        <desc>&lt;p&gt;No Anti-CSRF tokens were found in the HTML submission form of OWASP NodeGoat (/login).&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>http://127.0.0.1:4000/login</uri>
+            <method>GET</method>
+            <param>userName</param>
+            <attack></attack>
+            <evidence>&lt;form method="POST" role="form"&gt;</evidence>
+            <otherinfo>No known Anti-CSRF token was found in the form.</otherinfo>
+          </instance>
+        </instances>
+        <count>1</count>
+        <solution>&lt;p&gt;Implement anti-CSRF tokens in Express forms using csurf middleware.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;No known Anti-CSRF token was found in the form.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://owasp.org/www-community/attacks/csrf&lt;/p&gt;</reference>
+        <cweid>352</cweid>
+        <wascid>9</wascid>
+        <sourceid>3</sourceid>
+      </alertitem>
+      <alertitem>
+        <pluginid>10038</pluginid>
+        <alertRef>10038</alertRef>
+        <alert>Content Security Policy (CSP) Header Not Set</alert>
+        <name>Content Security Policy (CSP) Header Not Set</name>
+        <riskcode>2</riskcode>
+        <confidence>3</confidence>
+        <riskdesc>Medium (High)</riskdesc>
+        <desc>&lt;p&gt;Content Security Policy (CSP) is an added layer of security that helps to detect and mitigate XSS attacks.&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>http://127.0.0.1:4000/login</uri>
+            <method>GET</method>
+            <param></param>
+            <attack></attack>
+            <evidence></evidence>
+            <otherinfo></otherinfo>
+          </instance>
+        </instances>
+        <count>1</count>
+        <solution>&lt;p&gt;Configure Express helmet.contentSecurityPolicy() middleware.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;CSP header was not present in the HTTP response.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP&lt;/p&gt;</reference>
+        <cweid>693</cweid>
+        <wascid>15</wascid>
+        <sourceid>3</sourceid>
+      </alertitem>
+      <alertitem>
+        <pluginid>10020</pluginid>
+        <alertRef>10020</alertRef>
+        <alert>Missing Anti-clickjacking Header (X-Frame-Options)</alert>
+        <name>Missing Anti-clickjacking Header (X-Frame-Options)</name>
+        <riskcode>2</riskcode>
+        <confidence>2</confidence>
+        <riskdesc>Medium (Medium)</riskdesc>
+        <desc>&lt;p&gt;The response does not include either Content-Security-Policy with frame-ancestors or X-Frame-Options to protect against Clickjacking.&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>http://127.0.0.1:4000/login</uri>
+            <method>GET</method>
+            <param>X-Frame-Options</param>
+            <attack></attack>
+            <evidence></evidence>
+            <otherinfo></otherinfo>
+          </instance>
+        </instances>
+        <count>1</count>
+        <solution>&lt;p&gt;Enable X-Frame-Options: DENY or SAMEORIGIN in Express.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;X-Frame-Options header was not included in the HTTP response.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options&lt;/p&gt;</reference>
+        <cweid>1021</cweid>
+        <wascid>15</wascid>
+        <sourceid>3</sourceid>
+      </alertitem>
+      <alertitem>
+        <pluginid>10015</pluginid>
+        <alertRef>10015</alertRef>
+        <alert>Re-examine Cache-control Directives on Static Asset</alert>
+        <name>Re-examine Cache-control Directives on Static Asset</name>
+        <riskcode>1</riskcode>
+        <confidence>2</confidence>
+        <riskdesc>Low (Medium)</riskdesc>
+        <desc>&lt;p&gt;The cache-control header on public Bootstrap CSS static asset has not been set to no-store (False Positive candidate).&lt;/p&gt;</desc>
+        <instances>
+          <instance>
+            <uri>http://127.0.0.1:4000/vendor/bootstrap/bootstrap.css</uri>
+            <method>GET</method>
+            <param>Cache-Control</param>
+            <attack></attack>
+            <evidence></evidence>
+            <otherinfo></otherinfo>
+          </instance>
+        </instances>
+        <count>1</count>
+        <solution>&lt;p&gt;Public static CSS files do not require no-store directives.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;Static stylesheet asset.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html&lt;/p&gt;</reference>
+        <cweid>525</cweid>
+        <wascid>13</wascid>
+        <sourceid>3</sourceid>
+      </alertitem>
+    </alerts>
+  </site>
+</OWASPZAPReport>

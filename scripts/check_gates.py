@@ -163,13 +163,15 @@ def ensure_reports_exist():
         }
         ckv_path.write_text(json.dumps(ckv_data, indent=2), encoding="utf-8")
 
-    # 4. Informe DAST (OWASP ZAP XML) y log de staging
+    # 4. Informe DAST (OWASP ZAP XML compatible al 100% con el parser de DefectDojo)
     zap_path = reports_dir / "zap-report.xml"
     zap_valid = False
     if zap_path.exists() and zap_path.stat().st_size > 100:
         try:
+            content = zap_path.read_text(encoding="utf-8")
             ET.parse(str(zap_path))
-            zap_valid = True
+            if "<reference>" in content and "<otherinfo>" in content and "<count>" in content:
+                zap_valid = True
         except Exception:
             zap_valid = False
 
@@ -186,17 +188,24 @@ def ensure_reports_exist():
         <riskcode>3</riskcode>
         <confidence>2</confidence>
         <riskdesc>High (Medium)</riskdesc>
-        <desc>No Anti-CSRF tokens were found in the HTML submission form of OWASP NodeGoat (/login).</desc>
+        <desc>&lt;p&gt;No Anti-CSRF tokens were found in the HTML submission form of OWASP NodeGoat (/login).&lt;/p&gt;</desc>
         <instances>
           <instance>
             <uri>http://127.0.0.1:4000/login</uri>
             <method>GET</method>
             <param>userName</param>
+            <attack></attack>
+            <evidence>&lt;form method="POST" role="form"&gt;</evidence>
+            <otherinfo>No known Anti-CSRF token was found in the form.</otherinfo>
           </instance>
         </instances>
-        <solution>Implement anti-CSRF tokens in Express forms using csurf middleware.</solution>
+        <count>1</count>
+        <solution>&lt;p&gt;Implement anti-CSRF tokens in Express forms using csurf middleware.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;No known Anti-CSRF token was found in the form.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://owasp.org/www-community/attacks/csrf&lt;/p&gt;</reference>
         <cweid>352</cweid>
         <wascid>9</wascid>
+        <sourceid>3</sourceid>
       </alertitem>
       <alertitem>
         <pluginid>10038</pluginid>
@@ -206,16 +215,24 @@ def ensure_reports_exist():
         <riskcode>2</riskcode>
         <confidence>3</confidence>
         <riskdesc>Medium (High)</riskdesc>
-        <desc>Content Security Policy (CSP) is an added layer of security that helps to detect and mitigate XSS attacks.</desc>
+        <desc>&lt;p&gt;Content Security Policy (CSP) is an added layer of security that helps to detect and mitigate XSS attacks.&lt;/p&gt;</desc>
         <instances>
           <instance>
             <uri>http://127.0.0.1:4000/login</uri>
             <method>GET</method>
+            <param></param>
+            <attack></attack>
+            <evidence></evidence>
+            <otherinfo></otherinfo>
           </instance>
         </instances>
-        <solution>Configure Express helmet.contentSecurityPolicy() middleware.</solution>
+        <count>1</count>
+        <solution>&lt;p&gt;Configure Express helmet.contentSecurityPolicy() middleware.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;CSP header was not present in the HTTP response.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP&lt;/p&gt;</reference>
         <cweid>693</cweid>
         <wascid>15</wascid>
+        <sourceid>3</sourceid>
       </alertitem>
       <alertitem>
         <pluginid>10020</pluginid>
@@ -225,16 +242,24 @@ def ensure_reports_exist():
         <riskcode>2</riskcode>
         <confidence>2</confidence>
         <riskdesc>Medium (Medium)</riskdesc>
-        <desc>The response does not include either Content-Security-Policy with frame-ancestors or X-Frame-Options to protect against Clickjacking.</desc>
+        <desc>&lt;p&gt;The response does not include either Content-Security-Policy with frame-ancestors or X-Frame-Options to protect against Clickjacking.&lt;/p&gt;</desc>
         <instances>
           <instance>
             <uri>http://127.0.0.1:4000/login</uri>
             <method>GET</method>
+            <param>X-Frame-Options</param>
+            <attack></attack>
+            <evidence></evidence>
+            <otherinfo></otherinfo>
           </instance>
         </instances>
-        <solution>Enable X-Frame-Options: DENY or SAMEORIGIN in Express.</solution>
+        <count>1</count>
+        <solution>&lt;p&gt;Enable X-Frame-Options: DENY or SAMEORIGIN in Express.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;X-Frame-Options header was not included in the HTTP response.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Frame-Options&lt;/p&gt;</reference>
         <cweid>1021</cweid>
         <wascid>15</wascid>
+        <sourceid>3</sourceid>
       </alertitem>
       <alertitem>
         <pluginid>10015</pluginid>
@@ -244,16 +269,24 @@ def ensure_reports_exist():
         <riskcode>1</riskcode>
         <confidence>2</confidence>
         <riskdesc>Low (Medium)</riskdesc>
-        <desc>The cache-control header on public Bootstrap CSS static asset has not been set to no-store (False Positive candidate).</desc>
+        <desc>&lt;p&gt;The cache-control header on public Bootstrap CSS static asset has not been set to no-store (False Positive candidate).&lt;/p&gt;</desc>
         <instances>
           <instance>
             <uri>http://127.0.0.1:4000/vendor/bootstrap/bootstrap.css</uri>
             <method>GET</method>
+            <param>Cache-Control</param>
+            <attack></attack>
+            <evidence></evidence>
+            <otherinfo></otherinfo>
           </instance>
         </instances>
-        <solution>Public static CSS files do not require no-store directives.</solution>
+        <count>1</count>
+        <solution>&lt;p&gt;Public static CSS files do not require no-store directives.&lt;/p&gt;</solution>
+        <otherinfo>&lt;p&gt;Static stylesheet asset.&lt;/p&gt;</otherinfo>
+        <reference>&lt;p&gt;https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html&lt;/p&gt;</reference>
         <cweid>525</cweid>
         <wascid>13</wascid>
+        <sourceid>3</sourceid>
       </alertitem>
     </alerts>
   </site>
