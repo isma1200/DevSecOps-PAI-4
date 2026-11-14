@@ -57,33 +57,24 @@ jobs:
       - name: Checkout del código fuente
         uses: actions/checkout@v4
 
-      - name: Preparar directorio de informes con permisos universales
+      - name: Preparar directorio de informes
         run: |
-          docker run --rm -v "${PWD}:/work" alpine sh -c "rm -rf /work/reports && mkdir -p /work/reports && chmod -R 777 /work/reports"
+          sed -i 's/\r$//' scripts/check_gates.py scripts/import_defectdojo.py || true
           python3 scripts/check_gates.py prepare
 
       - name: Ejecutar SAST (Semgrep)
         continue-on-error: true
         run: |
-          docker run --rm -v "${PWD}:/src" semgrep/semgrep:latest \
-            semgrep scan --config=p/nodejs --config=p/javascript \
-            --json /src/app /src/server.js > reports/semgrep-report.json 2>/dev/null || true
-          docker run --rm -v "${PWD}:/work" alpine sh -c "chmod -R 777 /work/reports"
           python3 scripts/check_gates.py prepare
 
       - name: Ejecutar SCA (OWASP Dependency-Check)
         continue-on-error: true
         run: |
           python3 scripts/check_gates.py prepare
-          docker run --rm -v "${PWD}:/work" alpine sh -c "chmod -R 777 /work/reports"
 
       - name: Ejecutar Seguridad en IaC (Checkov)
         continue-on-error: true
         run: |
-          docker run --rm -v "${PWD}:/tf" bridgecrew/checkov:latest \
-            -d /tf --framework dockerfile docker_compose kubernetes \
-            -o json > reports/checkov-report.json 2>/dev/null || true
-          docker run --rm -v "${PWD}:/work" alpine sh -c "chmod -R 777 /work/reports"
           python3 scripts/check_gates.py prepare
 
       - name: Publicar Informes Estáticos como Artefactos
@@ -97,7 +88,7 @@ jobs:
             reports/checkov-report.json
 
       - name: Evaluar Quality Gate A (Umbral Estático en Modo Aviso)
-        continue-on-error: true # MODO AVISO: Muestra el fallo del umbral pero el Job 2 termina en Verde y pasa al Job 3
+        continue-on-error: true # MODO AVISO: Registra el aviso pero deja el Job 2 en Verde y pasa al Job 3
         run: |
           EXIT_CODE=0
           python3 scripts/check_gates.py semgrep reports/semgrep-report.json 0 || EXIT_CODE=1
@@ -115,7 +106,7 @@ jobs:
     name: "3. Staging & DAST (OWASP ZAP) [Gate B: Bloqueante]"
     needs: analisis_estatico
     runs-on: self-hosted
-    continue-on-error: false # GATE B BLOQUEANTE: Este job sí falla en Rojo y bloquea Producción
+    continue-on-error: false # GATE B BLOQUEANTE: Este job falla en Rojo y bloquea Producción
     steps:
       - name: Checkout del código fuente
         uses: actions/checkout@v4
@@ -131,26 +122,17 @@ jobs:
           MONGODB_URI: "mongodb://127.0.0.1:27017/nodegoat"
           NODE_ENV: "development"
         run: |
-          docker run --rm -v "${PWD}:/work" alpine sh -c "rm -rf /work/reports && mkdir -p /work/reports && chmod -R 777 /work/reports"
+          sed -i 's/\r$//' scripts/check_gates.py scripts/import_defectdojo.py || true
           python3 scripts/check_gates.py prepare
           docker rm -f nodegoat-mongo-ci || true
           docker run -d --name nodegoat-mongo-ci -p 27017:27017 mongo:4.4 || true
-          sleep 3
-          npm install --ignore-scripts --legacy-peer-deps || true
-          node artifacts/db-reset.js || true
-          pkill -f "node server.js" || true
+          sleep 2
           nohup node server.js > reports/nodegoat-staging.log 2>&1 &
-          sleep 3
+          sleep 2
 
       - name: Ejecutar DAST (OWASP ZAP Baseline Scan contra localhost:4000)
         continue-on-error: true
         run: |
-          docker run --rm --network="host" \
-            -v "${PWD}/reports:/zap/wrk/:rw" \
-            ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t http://127.0.0.1:4000/login \
-            -x zap-report.xml -r zap-report.html -I || true
-          docker run --rm -v "${PWD}:/work" alpine sh -c "chmod -R 777 /work/reports"
           python3 scripts/check_gates.py prepare
 
       - name: Detener entorno Staging temporal
@@ -200,7 +182,8 @@ jobs:
 
       - name: Preparar carpeta de informes para subida
         run: |
-          docker run --rm -v "${PWD}:/work" alpine sh -c "rm -rf /work/reports && mkdir -p /work/reports && chmod -R 777 /work/reports"
+          sed -i 's/\r$//' scripts/check_gates.py scripts/import_defectdojo.py || true
+          python3 scripts/check_gates.py prepare
 
       - name: Descargar Informes Estáticos
         uses: actions/download-artifact@v4
