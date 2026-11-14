@@ -1,0 +1,142 @@
+name: Pipeline DevSecOps - OWASP NodeGoat
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      zap_blocking_threshold:
+        description: "Umbral máximo de alertas Altas/Medias permitidas en Gate B (0 = Bloquea, 999 = Pasa)"
+        required: false
+        default: "0"
+
+jobs:
+  # =========================================================================
+  # STAGE 1: BUILD (Compilación y construcción de la imagen Docker)
+  # =========================================================================
+  build:
+    name: "1. Build & Package NodeGoat"
+    runs-on: self-hosted
+    steps:
+      - name: Checkout del código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Instalar dependencias de NodeGoat
+        run: npm install --ignore-scripts --legacy-peer-deps
+
+      - name: Construir imagen Docker de NodeGoat
+        run: |
+          printf "node_modules\n.git\nreports\n" > .dockerignore
+          cat << 'EOF' > Dockerfile
+          FROM node:18-alpine
+          ENV NODE_ENV=production
+          WORKDIR /usr/src/app
+          COPY package*.json ./
+          RUN npm install --ignore-scripts --legacy-peer-deps --silent
+          COPY . .
+          EXPOSE 4000
+          CMD ["node", "server.js"]
+          EOF
+          docker build -t nodegoat:ci .
+
+  # =========================================================================
+  # STAGE 2: ANÁLISIS ESTÁTICO (SAST, SCA, IaC) -> GATE A (MODO AVISO)
+  # =========================================================================
+  analisis_estatico:
+    name: "2. Análisis Estático (SAST, SCA, IaC) [Gate A: Aviso]"
+    needs: build
+    runs-on: self-hosted
+    continue-on-error: true # GATE A EN MODO AVISO: Informa del fallo pero permite avanzar al DAST
+    steps:
+      - name: Checkout del código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Preparar directorio de informes y package-lock.json
+        run: |
+          docker run --rm -v "${PWD}:/work" alpine sh -c "rm -rf /work/reports && mkdir -p /work/reports && chmod 777 /work/reports"
+          npm install --package-lock-only --ignore-scripts --legacy-peer-deps || true
+
+      # --- Herramienta 1: SAST con Semgrep ---
+      - name: Ejecutar SAST (Semgrep)
+        run: |
+          docker run --rm -v "${PWD}:/src" returntocorp/semgrep:latest \
+            semgrep scan --config=p/nodejs --config=p/javascript --config=p/owasp-top-ten \
+            --json --output=/src/reports/semgrep-report.json /src/app /src/server.js || true
+
+      # --- Herramienta 2: SCA con OWASP Dependency-Check ---
+      - name: Ejecutar SCA (OWASP Dependency-Check)
+        run: |
+          docker run --rm \
+            -v "${PWD}:/src" \
+            -v "${PWD}/reports:/report" \
+            owasp/dependency-check:latest \
+            --scan /src/package.json /src/package-lock.json \
+            --format XML \
+            --project "OWASP NodeGoat" \
+            --out /report \
+            --noupdate \
+            --disableYarnAudit --disableOssIndex || true
+
+      # --- Herramienta 3: IaC / Contenedores con Checkov ---
+      - name: Ejecutar Seguridad en IaC (Checkov)
+        run: |
+          docker run --rm -v "${PWD}:/tf" bridgecrew/checkov:latest \
+            -d /tf --framework dockerfile docker_compose kubernetes \
+            -o json --output-file-path /tf/reports || true
+          docker run --rm -v "${PWD}:/work" alpine sh -c "chmod -R 777 /work/reports"
+          if [ -f reports/results_json.json ]; then
+            mv reports/results_json.json reports/checkov-report.json
+          fi
+
+      - name: Publicar Informes Estáticos como Artefactos
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informes-seguridad-estaticos
+          path: |
+            reports/semgrep-report.json
+            reports/dependency-check-report.xml
+            reports/checkov-report.json
+
+      - name: Evaluar Quality Gate A (Umbral Estático en Modo Aviso)
+        run: |
+          EXIT_CODE=0
+          python3 scripts/check_gates.py semgrep reports/semgrep-report.json 0 || EXIT_CODE=1
+          python3 scripts/check_gates.py dependency-check reports/dependency-check-report.xml 0 || EXIT_CODE=1
+          python3 scripts/check_gates.py checkov reports/checkov-report.json 0 || EXIT_CODE=1
+          exit $EXIT_CODE
+
+  # =========================================================================
+  # STAGE 3: STAGING Y DAST (OWASP ZAP) -> GATE B (BLOQUEANTE)
+  # =========================================================================
+  dast:
+    name: "3. Staging & DAST (OWASP ZAP) [Gate B: Bloqueante]"
+    needs: analisis_estatico
+    runs-on: self-hosted
+    continue-on-error: false # GATE B BLOQUEANTE: Si detecta alertas Altas/Medias detiene el pipeline
+    steps:
+      - name: Checkout del código fuente
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Desplegar MongoDB y NodeGoat en Staging (localhost:4000)
+        env:
+          MONGODB_URI: "mongodb://127.0.0.1:27017/nodegoat"
+          NODE_ENV: "development"
+        run: |
