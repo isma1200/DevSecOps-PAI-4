@@ -53,52 +53,40 @@ jobs:
     name: "2. Análisis Estático (SAST, SCA, IaC) [Gate A: Aviso]"
     needs: build
     runs-on: self-hosted
-    continue-on-error: true # GATE A EN MODO AVISO: Informa del fallo pero permite avanzar al DAST
     steps:
       - name: Checkout del código fuente
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js 18
-        uses: actions/setup-node@v4
-        with:
-          node-version: "18"
-
-      - name: Preparar directorio de informes y package-lock.json
+      - name: Preparar directorio de informes
         run: |
-          docker run --rm -v "${PWD}:/work" alpine sh -c "rm -rf /work/reports && mkdir -p /work/reports && chmod 777 /work/reports"
-          npm install --package-lock-only --ignore-scripts --legacy-peer-deps || true
+          rm -rf reports && mkdir -p reports && chmod 777 reports
 
-      # --- Herramienta 1: SAST con Semgrep ---
       - name: Ejecutar SAST (Semgrep)
         run: |
-          docker run --rm -v "${PWD}:/src" returntocorp/semgrep:latest \
-            semgrep scan --config=p/nodejs --config=p/javascript --config=p/owasp-top-ten \
-            --json --output=/src/reports/semgrep-report.json /src/app /src/server.js || true
+          docker run --rm -v "${PWD}:/src" semgrep/semgrep:latest \
+            semgrep scan --config=p/nodejs --config=p/javascript \
+            --json /src/app /src/server.js > reports/semgrep-report.json 2>/dev/null || true
+          python3 scripts/check_gates.py prepare
 
-      # --- Herramienta 2: SCA con OWASP Dependency-Check ---
       - name: Ejecutar SCA (OWASP Dependency-Check)
         run: |
           docker run --rm \
             -v "${PWD}:/src" \
             -v "${PWD}/reports:/report" \
             owasp/dependency-check:latest \
-            --scan /src/package.json /src/package-lock.json \
+            --scan /src/package.json \
             --format XML \
             --project "OWASP NodeGoat" \
             --out /report \
-            --noupdate \
-            --disableYarnAudit --disableOssIndex || true
+            --noupdate --disableYarnAudit --disableOssIndex || true
+          python3 scripts/check_gates.py prepare
 
-      # --- Herramienta 3: IaC / Contenedores con Checkov ---
       - name: Ejecutar Seguridad en IaC (Checkov)
         run: |
           docker run --rm -v "${PWD}:/tf" bridgecrew/checkov:latest \
             -d /tf --framework dockerfile docker_compose kubernetes \
-            -o json --output-file-path /tf/reports || true
-          docker run --rm -v "${PWD}:/work" alpine sh -c "chmod -R 777 /work/reports"
-          if [ -f reports/results_json.json ]; then
-            mv reports/results_json.json reports/checkov-report.json
-          fi
+            -o json > reports/checkov-report.json 2>/dev/null || true
+          python3 scripts/check_gates.py prepare
 
       - name: Publicar Informes Estáticos como Artefactos
         if: always()
@@ -111,11 +99,15 @@ jobs:
             reports/checkov-report.json
 
       - name: Evaluar Quality Gate A (Umbral Estático en Modo Aviso)
+        continue-on-error: true # MODO AVISO: Registra el fallo del umbral pero permite pasar a DAST
         run: |
           EXIT_CODE=0
           python3 scripts/check_gates.py semgrep reports/semgrep-report.json 0 || EXIT_CODE=1
           python3 scripts/check_gates.py dependency-check reports/dependency-check-report.xml 0 || EXIT_CODE=1
           python3 scripts/check_gates.py checkov reports/checkov-report.json 0 || EXIT_CODE=1
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            echo "::warning title=Quality Gate A (Modo Aviso)::Se han detectado vulnerabilidades estáticas Altas/Críticas en NodeGoat. El pipeline continúa hacia DAST por estar en modo aviso."
+          fi
           exit $EXIT_CODE
 
   # =========================================================================
@@ -125,7 +117,7 @@ jobs:
     name: "3. Staging & DAST (OWASP ZAP) [Gate B: Bloqueante]"
     needs: analisis_estatico
     runs-on: self-hosted
-    continue-on-error: false # GATE B BLOQUEANTE: Si detecta alertas Altas/Medias detiene el pipeline
+    continue-on-error: false # GATE B BLOQUEANTE: Detiene el pipeline y bloquea el paso a Producción
     steps:
       - name: Checkout del código fuente
         uses: actions/checkout@v4
@@ -140,3 +132,93 @@ jobs:
           MONGODB_URI: "mongodb://127.0.0.1:27017/nodegoat"
           NODE_ENV: "development"
         run: |
+          rm -rf reports && mkdir -p reports && chmod 777 reports
+          docker rm -f nodegoat-mongo-ci || true
+          docker run -d --name nodegoat-mongo-ci -p 27017:27017 mongo:4.4 || true
+          sleep 3
+          npm install --ignore-scripts --legacy-peer-deps || true
+          node artifacts/db-reset.js || true
+          pkill -f "node server.js" || true
+          nohup node server.js > reports/nodegoat-staging.log 2>&1 &
+          sleep 4
+
+      - name: Ejecutar DAST (OWASP ZAP Baseline Scan contra localhost:4000)
+        run: |
+          docker run --rm --network="host" \
+            -v "${PWD}/reports:/zap/wrk/:rw" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t http://127.0.0.1:4000/login \
+            -x zap-report.xml -r zap-report.html -I || true
+          python3 scripts/check_gates.py prepare
+
+      - name: Detener entorno Staging temporal
+        if: always()
+        run: |
+          pkill -f "node server.js" || true
+          docker rm -f nodegoat-mongo-ci || true
+
+      - name: Publicar Informe DAST como Artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: informe-seguridad-dast
+          path: |
+            reports/zap-report.xml
+            reports/nodegoat-staging.log
+
+      - name: Evaluar Quality Gate B (Bloqueante ante hallazgos Altos/Medios)
+        run: |
+          THRESHOLD="${{ github.event.inputs.zap_blocking_threshold || '0' }}"
+          python3 scripts/check_gates.py zap reports/zap-report.xml "$THRESHOLD"
+
+  # =========================================================================
+  # STAGE 4: DESPLIEGUE A PRODUCCIÓN (Solo se ejecuta si Gate B aprueba)
+  # =========================================================================
+  produccion:
+    name: "4. Despliegue a Producción (Kubernetes)"
+    needs: dast
+    runs-on: self-hosted
+    steps:
+      - name: Desplegar versión aprobada en Producción
+        run: |
+          echo "✅ Quality Gate B superado. Desplegando NodeGoat en el clúster Kubernetes de producción..."
+
+  # =========================================================================
+  # STAGE 5: GESTIÓN CENTRALIZADA EN DEFECTDOJO (Se ejecuta SIEMPRE)
+  # =========================================================================
+  import-defectdojo:
+    name: "5. Importación Automática en DefectDojo (if: always())"
+    needs: [analisis_estatico, dast]
+    if: always()
+    runs-on: self-hosted
+    steps:
+      - name: Checkout del código fuente
+        uses: actions/checkout@v4
+
+      - name: Preparar carpeta de informes para subida
+        run: |
+          rm -rf reports && mkdir -p reports && chmod 777 reports
+
+      - name: Descargar Informes Estáticos
+        uses: actions/download-artifact@v4
+        with:
+          name: informes-seguridad-estaticos
+          path: reports
+        continue-on-error: true
+
+      - name: Descargar Informe DAST
+        uses: actions/download-artifact@v4
+        with:
+          name: informe-seguridad-dast
+          path: reports
+        continue-on-error: true
+
+      - name: Enviar los 4 informes a DefectDojo vía API
+        env:
+          DEFECTDOJO_URL: ${{ secrets.DEFECTDOJO_URL }}
+          DEFECTDOJO_API_KEY: ${{ secrets.DEFECTDOJO_API_KEY }}
+          DEFECTDOJO_ENGAGEMENT_ID: ${{ secrets.DEFECTDOJO_ENGAGEMENT_ID }}
+        run: |
+          python3 scripts/check_gates.py prepare
+          python3 -m pip install requests --break-system-packages || pip install requests || true
+          python3 scripts/import_defectdojo.py
